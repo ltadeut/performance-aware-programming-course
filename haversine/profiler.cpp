@@ -59,7 +59,6 @@ profiler_trace::~profiler_trace() {
 }
 
 #define __TRACE(NAME) profiler_trace Trace##__LINE__(NAME)
-#define _STR(X) #X
 #define TimeBlock(BLOCK_NAME) __TRACE(BLOCK_NAME)
 #define TimeFunction TimeBlock(__func__)
 
