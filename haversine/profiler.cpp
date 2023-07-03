@@ -54,7 +54,7 @@ profiler_trace::profiler_trace(const char* SectionName) {
 profiler_trace::~profiler_trace() {
 	u64 EndTime = clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW);
 
-	mSection->Runtime += (EndTime - mStartTime) / 1000.0;
+	mSection->Runtime += (EndTime - mStartTime) / 1000000.0;
 }
 
 #define __TRACE(NAME) profiler_trace Trace##__LINE__(NAME)
@@ -71,7 +71,7 @@ void BeginProfile() {
 void EndProfileAndPrint() {
 	u64 EndTime = clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW);
 
-	f64 TotalRuntime = (EndTime - ProfilerStartTime) / 1000.0;
+	f64 TotalRuntime = (EndTime - ProfilerStartTime) / 1000000.0;
 
 	printf("== Profiling results (Total time: %.3fms)\n", TotalRuntime);
 
