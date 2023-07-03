@@ -9,22 +9,6 @@ struct profiler_section {
 	u64 Hits;
 };
 
-static profiler_section RootSection;
-static profiler_section* LastSection;
-static profiler_section* ActiveSection;
-static u64 ProfilerStartTime;
-
-profiler_section* LookupSectionByName(const char* SectionName) {
-	profiler_section* Section = RootSection.Next;
-
-	while (Section) {
-		if (strcmp(SectionName, Section->Name) == 0) break;
-		Section = Section->Next;
-	}
-
-	return Section;
-}
-
 class profiler_trace {
 	private:
 		profiler_section* mSection;
@@ -33,6 +17,21 @@ class profiler_trace {
 		profiler_trace(const char* SectionName);
 		~profiler_trace();
 };
+
+static profiler_section ProfilerRootSection;
+static profiler_section* ProfilerLastSection;
+static u64 ProfilerStartTime;
+
+profiler_section* LookupSectionByName(const char* SectionName) {
+	profiler_section* Section = ProfilerRootSection.Next;
+
+	while (Section) {
+		if (strcmp(SectionName, Section->Name) == 0) break;
+		Section = Section->Next;
+	}
+
+	return Section;
+}
 
 profiler_trace::profiler_trace(const char* SectionName) {
 	mSection = LookupSectionByName(SectionName);
@@ -44,8 +43,8 @@ profiler_trace::profiler_trace(const char* SectionName) {
 		mSection->Hits = 0;
 		mSection->Runtime = 0.0;
 
-		LastSection->Next = mSection;
-		LastSection = mSection;
+		ProfilerLastSection->Next = mSection;
+		ProfilerLastSection = mSection;
 	}
 
 	mSection->Hits++;
@@ -63,9 +62,8 @@ profiler_trace::~profiler_trace() {
 #define TimeFunction TimeBlock(__func__)
 
 void BeginProfile() {
-	RootSection.Next = nullptr;
-	LastSection = &RootSection;
-	ActiveSection = nullptr;
+	ProfilerRootSection.Next = nullptr;
+	ProfilerLastSection = &ProfilerRootSection;
 
 	ProfilerStartTime = clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW);
 }
@@ -77,7 +75,7 @@ void EndProfileAndPrint() {
 
 	printf("== Profiling results (Total time: %.3fms)\n", TotalRuntime);
 
-	for (profiler_section* Section = RootSection.Next;
+	for (profiler_section* Section = ProfilerRootSection.Next;
 			Section;
 	    ) {
 
