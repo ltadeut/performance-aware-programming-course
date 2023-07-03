@@ -3,28 +3,31 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <stdbool.h>
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
+#include <cstdlib>
+#include <cstring>
+#include <cassert>
+#include <cstring>
 
 typedef double f64;
+typedef uint64_t u64;
+typedef uint8_t u8;
 
-#include "string.c"
-#include "json.c"
-#include "haversine_formula.c"
+#include "string.cpp"
+#include "profiler.cpp"
+#include "json.cpp"
+#include "haversine_formula.cpp"
 
 #define EARTH_RADIUS 6372.8
 
-typedef struct {
-	unsigned char* Data;
+struct buffer {
+	u8* Data;
 	size_t Size;
-} buffer;
+};
 
-typedef struct {
+struct memory_mapped_file {
 	buffer Contents;
 	bool IsValid;
-} memory_mapped_file;
+};
 
 memory_mapped_file OpenMemoryMappedFile(const char* FileName) {
 	memory_mapped_file Result = {0};
@@ -43,7 +46,7 @@ memory_mapped_file OpenMemoryMappedFile(const char* FileName) {
 
 			if (Mapping != MAP_FAILED) {
 				Result.Contents = (buffer) {
-					.Data = Mapping,
+					.Data = (u8*)Mapping,
 						.Size = FileSize
 				};
 
@@ -73,7 +76,10 @@ bool CloseMemoryMappedFile(memory_mapped_file* File) {
 
 
 int main(int CommandLineArgumentsCount, char* CommandLineArguments[]) {
+
+	BeginProfile();
 	const char* FileName = CommandLineArguments[1];
+
 	memory_mapped_file File = OpenMemoryMappedFile(FileName);
 
 	if (!File.IsValid) {
@@ -81,7 +87,13 @@ int main(int CommandLineArgumentsCount, char* CommandLineArguments[]) {
 		return 1;
 	}
 
-	json_element* JsonData = ParseJSON((char*)File.Contents.Data, File.Contents.Size);
+	json_element* JsonData;
+
+
+	{
+		TimeBlock("Parse JSON file");
+		JsonData = ParseJSON((char*)File.Contents.Data, File.Contents.Size);
+	}
 
 	if (JsonData)  {
 		json_element* PairsData = GetKey(JsonData, STRING("pairs"));
@@ -92,6 +104,8 @@ int main(int CommandLineArgumentsCount, char* CommandLineArguments[]) {
 			json_array_iterator Iter = MakeJSONArrayIterator(PairsData);
 
 			for (json_element* Item = Next(&Iter); Item; Item = Next(&Iter)) {
+				TimeBlock("Process haversine pair");
+
 				json_element* X0Value = GetKey(Item, STRING("x0"));
 				f64 X0 = ConvertJSONValueToF64(X0Value);
 
@@ -117,7 +131,9 @@ int main(int CommandLineArgumentsCount, char* CommandLineArguments[]) {
 		}
 	}
 
+	EndProfileAndPrint();
 	CloseMemoryMappedFile(&File);
+
 
 	return 0;
 }

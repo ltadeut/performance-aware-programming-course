@@ -1,26 +1,25 @@
 #define __JSON_IS_DIGIT(CH) ('0' <= (CH) && (CH) <= '9')
 
-typedef enum {
+enum json_element_type {
 	json_object,
 	json_array,
 	json_value
-} json_element_type;
+};
 
 struct json_element;
 
-typedef struct json_key_value_pair {
-	struct json_key_value_pair* Next;
-
+struct json_key_value_pair {
+	json_key_value_pair* Next;
 	string Key;
-	struct json_element* Value;
-} json_key_value_pair;
+	json_element* Value;
+};
 
-typedef struct json_array_item {
-	struct json_array_item* Next;
-	struct json_element* Value;
-} json_array_item;
+struct json_array_item {
+	json_array_item* Next;
+	json_element* Value;
+};
 
-typedef struct json_element {
+struct json_element {
 	json_element_type Type;
 
 	union {
@@ -28,13 +27,13 @@ typedef struct json_element {
 		json_array_item* Array;
 		string Value;
 	};
-} json_element;
+};
 
-typedef struct {
+struct __json_parse_context{
 	const char* Content;
 	size_t ContentSize;
 	size_t Offset;
-} __json_parse_context;
+};
 
 static json_element* ParseValue(__json_parse_context* Context);
 static json_element* ParseArray(__json_parse_context* Context);
@@ -181,7 +180,7 @@ static json_element* ParseValue(__json_parse_context* Context) {
 }
 
 static inline void InsertKeyValue(json_element* Json, string Key, json_element* Value) {
-	json_key_value_pair* Pair = malloc(sizeof(json_key_value_pair));
+	json_key_value_pair* Pair = (json_key_value_pair*)malloc(sizeof(json_key_value_pair));
 
 	Pair->Key = Key;
 	Pair->Value = Value;
@@ -255,7 +254,7 @@ static void FreeJSON(json_element* Json) {
 	switch (Json->Type) {
 		case json_value: 
 			{
-				free(Json->Value.Data);
+				free((void*)(Json->Value.Data));
 			}
 			break;
 		case json_array:
@@ -273,7 +272,7 @@ static void FreeJSON(json_element* Json) {
 		case json_object:
 			{
 				for (json_key_value_pair* Pair = Json->Object; Pair; ) {
-					free(Pair->Key.Data);
+					free((void*)Pair->Key.Data);
 					FreeJSON(Pair->Value);
 
 					json_key_value_pair* Next = Pair->Next;
@@ -289,6 +288,7 @@ static void FreeJSON(json_element* Json) {
 }
 
 json_element* GetKey(json_element* Json, string Key) {
+	TimeFunction;
 	json_element* Result = NULL;
 
 	if (Json->Type == json_object) {

@@ -7,6 +7,6 @@ mkdir -p build
 pushd build
 
 clang -std=c17 -O2 ../gen.c -o GenerateRandomHaversineData
-clang -std=c17 -g -O0 ../processor.c -o ComputeHaversineAverage
+clang++ -g -O0 ../processor.cpp -o ComputeHaversineAverage
 
 popd

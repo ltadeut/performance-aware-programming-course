@@ -1,18 +1,17 @@
-typedef struct {
-	char* Data;
+struct string {
+	const char* Data;
 	size_t Size;
-} string;
+};
 
 string CopyString(const char* String, off_t StartOffset, size_t Count) {
-	string Result = {
-		.Data = (char*)malloc(sizeof(char) * (Count + 1)),
+	char* Data = (char*)malloc(sizeof(char) * (Count + 1));
+	memcpy(Data, String + StartOffset, Count);
+	Data[Count] = 0;
+
+	return {
+		.Data = Data,
 		.Size = Count
 	};
-
-	memcpy(Result.Data, String + StartOffset, Count);
-	Result.Data[Count] = 0;
-
-	return Result;
 }
 
 bool StringEqual(string A, string B) {
