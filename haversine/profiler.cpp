@@ -63,7 +63,6 @@ profiler_trace::~profiler_trace() {
 #define TimeBlock(BLOCK_NAME) __TRACE(BLOCK_NAME)
 #define TimeFunction TimeBlock(__func__)
 
-
 void BeginProfile() {
 	RootSection.Next = nullptr;
 	LastSection = &RootSection;
