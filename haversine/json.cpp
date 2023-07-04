@@ -139,6 +139,8 @@ static json_element* ParseArray(__json_parse_context* Context) {
 }
 
 static json_element* ParseValue(__json_parse_context* Context) {
+	TimeFunction;
+
 	EatWhitespace(Context);
 
 	json_element* Result = NULL;

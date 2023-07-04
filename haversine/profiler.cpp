@@ -1,29 +1,34 @@
 #include <sys/time.h>
-#include <mach/mach.h>
-#include <mach/mach_time.h>
 
 struct profiler_section {
 	profiler_section* Next;
 	const char* Name;
-	f64 Runtime;
+	u64 Elapsed;
 	u64 Hits;
 };
 
 class profiler_trace {
 	private:
 		profiler_section* mSection;
-		u64 mStartTime;
+		u64 mStartCounter;
 	public:
 		profiler_trace(const char* SectionName);
 		~profiler_trace();
 };
 
-static profiler_section ProfilerRootSection;
-static profiler_section* ProfilerLastSection;
-static u64 ProfilerStartTime;
+struct profiler {
+	profiler_section RootSection;
+	profiler_section* LastSection;
+	profiler_section* ActiveSection;
+	u64 StartCounter;
+	u64 EndCounter;
+	u64 CPUFrequency;
+};
 
-profiler_section* LookupSectionByName(const char* SectionName) {
-	profiler_section* Section = ProfilerRootSection.Next;
+static profiler GlobalProfiler;
+
+static profiler_section* LookupSectionByName(const char* SectionName) {
+	profiler_section* Section = GlobalProfiler.RootSection.Next;
 
 	while (Section) {
 		if (strcmp(SectionName, Section->Name) == 0) break;
@@ -31,6 +36,22 @@ profiler_section* LookupSectionByName(const char* SectionName) {
 	}
 
 	return Section;
+}
+
+static u64 ReadCPUVirtualCounter() {
+	u64 Result;
+
+	asm volatile ("isb;\n\tmrs %0, cntvct_el0" : "=r" (Result) :: "memory");
+
+	return Result;
+}
+
+static u64 ReadCPUVirtualCounterFrequency() {
+	u64 Result;
+
+	asm volatile ("mrs %0, cntfrq_el0" : "=r" (Result) :: "memory");
+
+	return Result;
 }
 
 profiler_trace::profiler_trace(const char* SectionName) {
@@ -41,20 +62,20 @@ profiler_trace::profiler_trace(const char* SectionName) {
 		mSection->Next = nullptr;
 		mSection->Name = SectionName;
 		mSection->Hits = 0;
-		mSection->Runtime = 0.0;
+		mSection->Elapsed = 0;
 
-		ProfilerLastSection->Next = mSection;
-		ProfilerLastSection = mSection;
+		GlobalProfiler.LastSection->Next = mSection;
+		GlobalProfiler.LastSection = mSection;
 	}
 
-	mSection->Hits++;
-	mStartTime = clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW);
+	mStartCounter = ReadCPUVirtualCounter();
 }
 
 profiler_trace::~profiler_trace() {
-	u64 EndTime = clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW);
+	u64 EndCounter = ReadCPUVirtualCounter();
 
-	mSection->Runtime += (EndTime - mStartTime) / 1000000.0;
+	mSection->Hits++;
+	mSection->Elapsed += (EndCounter - mStartCounter);
 }
 
 #define __TRACE(NAME) profiler_trace Trace##__LINE__(NAME)
@@ -62,24 +83,23 @@ profiler_trace::~profiler_trace() {
 #define TimeFunction TimeBlock(__func__)
 
 void BeginProfile() {
-	ProfilerRootSection.Next = nullptr;
-	ProfilerLastSection = &ProfilerRootSection;
-
-	ProfilerStartTime = clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW);
+	GlobalProfiler.RootSection.Next = nullptr;
+	GlobalProfiler.LastSection = &GlobalProfiler.RootSection;
+	GlobalProfiler.StartCounter = ReadCPUVirtualCounter();
+	GlobalProfiler.CPUFrequency = ReadCPUVirtualCounterFrequency();
 }
 
 void EndProfileAndPrint() {
-	u64 EndTime = clock_gettime_nsec_np(CLOCK_MONOTONIC_RAW);
+	GlobalProfiler.EndCounter = ReadCPUVirtualCounter();
 
-	f64 TotalRuntime = (EndTime - ProfilerStartTime) / 1000000.0;
+	u64 TotalElapsed = (GlobalProfiler.EndCounter - GlobalProfiler.StartCounter);
 
-	printf("== Profiling results (Total time: %.3fms)\n", TotalRuntime);
+	printf("== Profiling results (Total ticks: %llu)\n", TotalElapsed);
 
-	for (profiler_section* Section = ProfilerRootSection.Next;
+	for (profiler_section* Section = GlobalProfiler.RootSection.Next;
 			Section;
 	    ) {
-
-		printf("\t%s[%llu]: %.3fms (%.2f%%)\n", Section->Name, Section->Hits, Section->Runtime, ((f64)Section->Runtime / (f64)TotalRuntime) * 100.0);
+		printf("\t%s[%llu]: %llu(%.2f%%)\n", Section->Name, Section->Hits, Section->Elapsed, ((f64)Section->Elapsed / (f64)TotalElapsed) * 100.0);
 
 		profiler_section* NextSection = Section->Next;
 		free(Section);
