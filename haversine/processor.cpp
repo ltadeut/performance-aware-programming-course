@@ -8,10 +8,7 @@
 #include <cassert>
 #include <cstring>
 
-typedef double f64;
-typedef uint64_t u64;
-typedef uint8_t u8;
-
+#include "common.hpp"
 #include "string.cpp"
 #include "profiler.cpp"
 #include "json.cpp"
@@ -78,6 +75,7 @@ bool CloseMemoryMappedFile(memory_mapped_file* File) {
 int main(int CommandLineArgumentsCount, char* CommandLineArguments[]) {
 
 	BeginProfile();
+
 	const char* FileName = CommandLineArguments[1];
 
 	memory_mapped_file File = OpenMemoryMappedFile(FileName);
@@ -127,7 +125,6 @@ int main(int CommandLineArgumentsCount, char* CommandLineArguments[]) {
 
 	EndProfileAndPrint();
 	CloseMemoryMappedFile(&File);
-
 
 	return 0;
 }

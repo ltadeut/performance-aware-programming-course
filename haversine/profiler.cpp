@@ -1,7 +1,4 @@
-#include <sys/time.h>
-
 struct profiler_section {
-	profiler_section* Next;
 	const char* Name;
 	u64 Elapsed;
 	u64 ChildrenElapsed;
@@ -10,18 +7,18 @@ struct profiler_section {
 
 class profiler_trace {
 	private:
-		profiler_section* mSection;
-		profiler_section* mParentSection;
 		u64 mStartCounter;
+		u32 mSectionRef;
 	public:
 		profiler_trace(const char* SectionName);
 		~profiler_trace();
 };
 
 struct profiler {
-	profiler_section RootSection;
-	profiler_section* LastSection;
-	profiler_section* ActiveSection;
+	profiler_section Sections[4096];
+	u32 SectionsCount;
+	u32 ActiveSectionsStack[4096];
+	u32 ActiveSectionsCount;
 	u64 StartCounter;
 	u64 EndCounter;
 	u64 CPUFrequency;
@@ -29,15 +26,15 @@ struct profiler {
 
 static profiler GlobalProfiler;
 
-static profiler_section* LookupSectionByName(const char* SectionName) {
-	profiler_section* Section = GlobalProfiler.RootSection.Next;
+static u32 LookupSectionByName(const char* SectionName) {
 
-	while (Section) {
-		if (strcmp(SectionName, Section->Name) == 0) break;
-		Section = Section->Next;
+	for (u32 Index = 1; Index <= GlobalProfiler.SectionsCount; Index++) {
+		if (strcmp(GlobalProfiler.Sections[Index].Name, SectionName) == 0) {
+			return Index;
+		}
 	}
 
-	return Section;
+	return 0;
 }
 
 static u64 ReadCPUVirtualCounter() {
@@ -57,23 +54,14 @@ static u64 ReadCPUVirtualCounterFrequency() {
 }
 
 profiler_trace::profiler_trace(const char* SectionName) {
-	mSection = LookupSectionByName(SectionName);
 
-	if (!mSection) {
-		mSection = (profiler_section*)malloc(sizeof(profiler_section));
-		mSection->Next = nullptr;
-		mSection->Name = SectionName;
-		mSection->Hits = 0;
-		mSection->Elapsed = 0;
-		mSection->ChildrenElapsed = 0;
-
-		GlobalProfiler.LastSection->Next = mSection;
-		GlobalProfiler.LastSection = mSection;
+	mSectionRef = LookupSectionByName(SectionName);
+	if (mSectionRef == 0) {
+		mSectionRef = ++GlobalProfiler.SectionsCount;
+		GlobalProfiler.Sections[mSectionRef].Name = SectionName;
 	}
 
-	mParentSection = GlobalProfiler.ActiveSection;
-	GlobalProfiler.ActiveSection = mSection;
-
+	GlobalProfiler.ActiveSectionsStack[++GlobalProfiler.ActiveSectionsCount] = mSectionRef;
 	mStartCounter = ReadCPUVirtualCounter();
 }
 
@@ -81,14 +69,21 @@ profiler_trace::~profiler_trace() {
 	u64 EndCounter = ReadCPUVirtualCounter();
 	u64 Elapsed = EndCounter - mStartCounter;
 
-	mSection->Hits++;
-	mSection->Elapsed += Elapsed;
+	// Pop the active section
+	GlobalProfiler.Sections[mSectionRef].Hits++;
+	u32 ParentRef = --GlobalProfiler.ActiveSectionsCount;
 
-	if (mSection != mParentSection) {
-		mParentSection->ChildrenElapsed += Elapsed;
+
+	for (u32 Index = GlobalProfiler.ActiveSectionsCount; Index; Index--) {
+		u32 Ref = GlobalProfiler.ActiveSectionsStack[Index];
+
+		if (Ref == mSectionRef) {
+			return;
+		}
 	}
 
-	GlobalProfiler.ActiveSection = mParentSection;
+	GlobalProfiler.Sections[ParentRef].ChildrenElapsed += Elapsed;
+	GlobalProfiler.Sections[mSectionRef].Elapsed += Elapsed;
 }
 
 #define __TRACE(NAME) profiler_trace Trace##__LINE__(NAME)
@@ -96,9 +91,12 @@ profiler_trace::~profiler_trace() {
 #define TimeFunction TimeBlock(__func__)
 
 void BeginProfile() {
-	GlobalProfiler.RootSection.Next = nullptr;
-	GlobalProfiler.LastSection = &GlobalProfiler.RootSection;
-	GlobalProfiler.ActiveSection = &GlobalProfiler.RootSection;
+	memset(GlobalProfiler.Sections, 0, sizeof(GlobalProfiler.Sections));
+	GlobalProfiler.SectionsCount = 0;
+
+	memset(GlobalProfiler.ActiveSectionsStack, 0, sizeof(GlobalProfiler.ActiveSectionsStack));
+	GlobalProfiler.ActiveSectionsCount = 0;
+
 	GlobalProfiler.StartCounter = ReadCPUVirtualCounter();
 	GlobalProfiler.CPUFrequency = ReadCPUVirtualCounterFrequency();
 }
@@ -110,9 +108,8 @@ void EndProfileAndPrint() {
 
 	printf("== Profiling results (Total ticks: %llu)\n", TotalElapsed);
 
-	for (profiler_section* Section = GlobalProfiler.RootSection.Next;
-			Section;
-	    ) {
+	for (u32 Index = 1; Index <= GlobalProfiler.SectionsCount; Index++) {
+		profiler_section* Section = &GlobalProfiler.Sections[Index];
 
 		u64 ElapsedMinusChildren = Section->Elapsed - Section->ChildrenElapsed;
 		f64 ElapsedPercentage =((f64)Section->Elapsed / (f64)TotalElapsed) * 100.0;
@@ -120,9 +117,5 @@ void EndProfileAndPrint() {
 
 		printf("\t%s[%llu]: %llu, %llu(%.2f%%, %.2f%%)\n", Section->Name, Section->Hits, Section->Elapsed, ElapsedMinusChildren, ElapsedPercentage, ElapsedMinusChildrenPercentage);
 
-		profiler_section* NextSection = Section->Next;
-		free(Section);
-
-		Section = NextSection;
 	}
 }
