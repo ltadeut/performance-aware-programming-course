@@ -36,5 +36,5 @@ int main() {
 	
 	A(true);
 
-	EndProfileAndPrint();
+	EndAndPrintProfile();
 }
