@@ -139,6 +139,7 @@ static json_element* ParseArray(__json_parse_context* Context) {
 }
 
 static json_element* ParseValue(__json_parse_context* Context) {
+	TimeFunction;
 	EatWhitespace(Context);
 
 	json_element* Result = NULL;
@@ -190,6 +191,7 @@ static inline void InsertKeyValue(json_element* Json, string Key, json_element* 
 }
 
 static json_element* ParseObject(__json_parse_context* Context) {
+	TimeFunction;
 	EatWhitespace(Context);
 
 	if (!Expect(Context, '{')) return NULL;

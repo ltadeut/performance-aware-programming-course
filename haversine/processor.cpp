@@ -89,11 +89,7 @@ int main(int CommandLineArgumentsCount, char* CommandLineArguments[]) {
 
 	json_element* JsonData;
 
-
-	{
-		TimeBlock("Parse JSON file");
-		JsonData = ParseJSON((char*)File.Contents.Data, File.Contents.Size);
-	}
+	JsonData = ParseJSON((char*)File.Contents.Data, File.Contents.Size);
 
 	if (JsonData)  {
 		json_element* PairsData = GetKey(JsonData, STRING("pairs"));
@@ -104,8 +100,6 @@ int main(int CommandLineArgumentsCount, char* CommandLineArguments[]) {
 			json_array_iterator Iter = MakeJSONArrayIterator(PairsData);
 
 			for (json_element* Item = Next(&Iter); Item; Item = Next(&Iter)) {
-				TimeBlock("Process haversine pair");
-
 				json_element* X0Value = GetKey(Item, STRING("x0"));
 				f64 X0 = ConvertJSONValueToF64(X0Value);
 
