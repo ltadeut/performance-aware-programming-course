@@ -76,13 +76,18 @@ int main(int CommandLineArgumentsCount, char* CommandLineArguments[]) {
 
 	BeginProfile();
 
+	memory_mapped_file File; 
+	{
+
+	TimeBlock("ReadEntireFile");
 	const char* FileName = CommandLineArguments[1];
 
-	memory_mapped_file File = OpenMemoryMappedFile(FileName);
+	File= OpenMemoryMappedFile(FileName);
 
 	if (!File.IsValid) {
 		fprintf(stderr, "Failed to open the input file: %s\n", FileName);
 		return 1;
+	}
 	}
 
 	json_element* JsonData;

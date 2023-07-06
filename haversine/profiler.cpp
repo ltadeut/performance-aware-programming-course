@@ -71,8 +71,7 @@ profiler_trace::~profiler_trace() {
 
 	// Pop the active section
 	GlobalProfiler.Sections[mSectionRef].Hits++;
-	u32 ParentRef = --GlobalProfiler.ActiveSectionsCount;
-
+	u32 ParentRef = GlobalProfiler.ActiveSectionsStack[--GlobalProfiler.ActiveSectionsCount];
 
 	for (u32 Index = GlobalProfiler.ActiveSectionsCount; Index; Index--) {
 		u32 Ref = GlobalProfiler.ActiveSectionsStack[Index];
@@ -86,8 +85,9 @@ profiler_trace::~profiler_trace() {
 	GlobalProfiler.Sections[mSectionRef].Elapsed += Elapsed;
 }
 
-#define __TRACE(NAME) profiler_trace Trace##__LINE__(NAME)
-#define TimeBlock(BLOCK_NAME) __TRACE(BLOCK_NAME)
+#define NameConcat2(A, B) A##B
+#define NameConcat(A, B) NameConcat2(A, B)
+#define TimeBlock(NAME) profiler_trace NameConcat(Trace, __LINE__)(NAME)
 #define TimeFunction TimeBlock(__func__)
 
 void BeginProfile() {
