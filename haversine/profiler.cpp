@@ -29,7 +29,7 @@ static profiler GlobalProfiler;
 static u32 LookupSectionByName(const char* SectionName) {
 
 	for (u32 Index = 1; Index <= GlobalProfiler.SectionsCount; Index++) {
-		if (strcmp(GlobalProfiler.Sections[Index].Name, SectionName) == 0) {
+		if (GlobalProfiler.Sections[Index].Name == SectionName) {
 			return Index;
 		}
 	}
@@ -37,7 +37,8 @@ static u32 LookupSectionByName(const char* SectionName) {
 	return 0;
 }
 
-static u64 ReadCPUVirtualCounter() {
+#if __arm__ || __aarch64__
+static u64 ReadCPUTimer() {
 	u64 Result;
 
 	asm volatile ("isb;\n\tmrs %0, cntvct_el0" : "=r" (Result) :: "memory");
@@ -45,13 +46,65 @@ static u64 ReadCPUVirtualCounter() {
 	return Result;
 }
 
-static u64 ReadCPUVirtualCounterFrequency() {
+static u64 EstimateCPUFrequency() {
 	u64 Result;
 
 	asm volatile ("mrs %0, cntfrq_el0" : "=r" (Result) :: "memory");
 
 	return Result;
 }
+
+#elif _WIN64
+
+#include <intrin.h>
+#include <windows.h>
+
+static u64 GetOSTimerFreq(void)
+{
+	LARGE_INTEGER Freq;
+	QueryPerformanceFrequency(&Freq);
+	return Freq.QuadPart;
+}
+
+static u64 ReadOSTimer(void)
+{
+	LARGE_INTEGER Value;
+	QueryPerformanceCounter(&Value);
+	return Value.QuadPart;
+}
+
+static u64 ReadCPUTimer() {
+		return __rdtsc();
+}
+
+static u64 EstimateCPUFrequency(void)
+{
+	u64 MillisecondsToWait = 100;
+	u64 OSFreq = GetOSTimerFreq();
+
+	u64 CPUStart = ReadCPUTimer();
+	u64 OSStart = ReadOSTimer();
+	u64 OSEnd = 0;
+	u64 OSElapsed = 0;
+	u64 OSWaitTime = OSFreq * MillisecondsToWait / 1000;
+	while(OSElapsed < OSWaitTime)
+	{
+		OSEnd = ReadOSTimer();
+		OSElapsed = OSEnd - OSStart;
+	}
+	
+	u64 CPUEnd = ReadCPUTimer();
+	u64 CPUElapsed = CPUEnd - CPUStart;
+	
+	u64 CPUFreq = 0;
+	if(OSElapsed)
+	{
+		CPUFreq = OSFreq * CPUElapsed / OSElapsed;
+	}
+	
+	return CPUFreq;
+}
+#endif
 
 profiler_trace::profiler_trace(const char* SectionName) {
 
@@ -62,27 +115,28 @@ profiler_trace::profiler_trace(const char* SectionName) {
 	}
 
 	GlobalProfiler.ActiveSectionsStack[++GlobalProfiler.ActiveSectionsCount] = mSectionRef;
-	mStartCounter = ReadCPUVirtualCounter();
+	mStartCounter = ReadCPUTimer();
 }
 
 profiler_trace::~profiler_trace() {
-	u64 EndCounter = ReadCPUVirtualCounter();
+	u64 EndCounter = ReadCPUTimer();
 	u64 Elapsed = EndCounter - mStartCounter;
 
 	// Pop the active section
 	GlobalProfiler.Sections[mSectionRef].Hits++;
 	u32 ParentRef = GlobalProfiler.ActiveSectionsStack[--GlobalProfiler.ActiveSectionsCount];
 
+	bool Recursive = false;
 	for (u32 Index = GlobalProfiler.ActiveSectionsCount; Index; Index--) {
 		u32 Ref = GlobalProfiler.ActiveSectionsStack[Index];
 
 		if (Ref == mSectionRef) {
-			return;
+			Recursive = true;
 		}
 	}
 
-	GlobalProfiler.Sections[ParentRef].ChildrenElapsed += Elapsed;
-	GlobalProfiler.Sections[mSectionRef].Elapsed += Elapsed;
+	if (mSectionRef != ParentRef) GlobalProfiler.Sections[ParentRef].ChildrenElapsed += Elapsed;
+	if (!Recursive) GlobalProfiler.Sections[mSectionRef].Elapsed += Elapsed;
 }
 
 #define NameConcat2(A, B) A##B
@@ -97,12 +151,12 @@ void BeginProfile() {
 	memset(GlobalProfiler.ActiveSectionsStack, 0, sizeof(GlobalProfiler.ActiveSectionsStack));
 	GlobalProfiler.ActiveSectionsCount = 0;
 
-	GlobalProfiler.StartCounter = ReadCPUVirtualCounter();
-	GlobalProfiler.CPUFrequency = ReadCPUVirtualCounterFrequency();
+	GlobalProfiler.CPUFrequency = EstimateCPUFrequency();
+	GlobalProfiler.StartCounter = ReadCPUTimer();
 }
 
-void EndProfileAndPrint() {
-	GlobalProfiler.EndCounter = ReadCPUVirtualCounter();
+void EndAndPrintProfile() {
+	GlobalProfiler.EndCounter = ReadCPUTimer();
 
 	u64 TotalElapsed = (GlobalProfiler.EndCounter - GlobalProfiler.StartCounter);
 
