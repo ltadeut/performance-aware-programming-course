@@ -1,8 +1,7 @@
+#include <cassert>
+#include <cstdio>
 #include <cstdlib>
 #include <cstring>
-#include <cassert>
-#include <cstring>
-#include <cstdio>
 
 #include <unistd.h>
 
@@ -10,31 +9,29 @@
 
 #include "profiler.cpp"
 
-
 void B();
 
 void A(bool CallB) {
 
-	TimeFunction;
+  TimeFunction;
 
-	if (CallB) {
-		B();
-	}
+  if (CallB) {
+    B();
+  }
 }
 
 void B() {
-	TimeFunction;
+  TimeFunction;
 
-	sleep(10);
+  sleep(10);
 
-	A(false);
+  A(false);
 }
 
-
 int main() {
-	BeginProfile();
-	
-	A(true);
+  BeginProfile();
 
-	EndAndPrintProfile();
+  A(true);
+
+  EndProfileAndPrint();
 }
