@@ -9,7 +9,7 @@ class profiler_trace {
 private:
   u64 mStartCounter;
   u64 mPreviousElapsedInclusive;
-  const char* mSectionName;
+  const char *mSectionName;
   u32 mSectionIndex;
   u32 mParentSectionIndex;
 
@@ -95,8 +95,9 @@ profiler_trace::profiler_trace(const char *SectionName, u32 SectionIndex) {
   mSectionName = SectionName;
   mSectionIndex = SectionIndex;
   mParentSectionIndex = GlobalProfiler.ActiveSectionIndex;
-  mPreviousElapsedInclusive = GlobalProfiler.Sections[mSectionIndex].ElapsedInclusive;
-  
+  mPreviousElapsedInclusive =
+      GlobalProfiler.Sections[mSectionIndex].ElapsedInclusive;
+
   GlobalProfiler.ActiveSectionIndex = SectionIndex;
 
   mStartCounter = ReadCPUTimer();
@@ -107,8 +108,8 @@ profiler_trace::~profiler_trace() {
   u64 Elapsed = EndCounter - mStartCounter;
   GlobalProfiler.ActiveSectionIndex = mParentSectionIndex;
 
-  profiler_section* Parent = GlobalProfiler.Sections + mParentSectionIndex;
-  profiler_section* Section = GlobalProfiler.Sections + mSectionIndex;
+  profiler_section *Parent = GlobalProfiler.Sections + mParentSectionIndex;
+  profiler_section *Section = GlobalProfiler.Sections + mSectionIndex;
 
   // Pop the active section
   Parent->ElapsedExclusive -= Elapsed;
@@ -120,7 +121,8 @@ profiler_trace::~profiler_trace() {
 
 #define NameConcat2(A, B) A##B
 #define NameConcat(A, B) NameConcat2(A, B)
-#define TimeBlock(NAME) profiler_trace NameConcat(Trace, __LINE__)(NAME, __COUNTER__ + 1)
+#define TimeBlock(NAME)                                                        \
+  profiler_trace NameConcat(Trace, __LINE__)(NAME, __COUNTER__ + 1)
 #define TimeFunction TimeBlock(__func__)
 #define ArrayCount(A) (sizeof(A) / sizeof(A[0]))
 
@@ -140,9 +142,11 @@ void EndProfileAndPrint() {
     profiler_section *Section = &GlobalProfiler.Sections[Index];
 
     if (Section->Name) {
-	    printf("\t%s[%llu]: %llu, %llu(%.2f%%, %.2f%%)\n", Section->Name,
-		   Section->Hits, Section->ElapsedInclusive, Section->ElapsedExclusive,
-		   100.0 * Section->ElapsedInclusive / TotalElapsed, 100.0 * Section->ElapsedExclusive / TotalElapsed);
+      printf("\t%s[%llu]: %llu, %llu(%.2f%%, %.2f%%)\n", Section->Name,
+             Section->Hits, Section->ElapsedInclusive,
+             Section->ElapsedExclusive,
+             100.0 * Section->ElapsedInclusive / TotalElapsed,
+             100.0 * Section->ElapsedExclusive / TotalElapsed);
     }
   }
 }
