@@ -7,6 +7,7 @@
 
 #include "common.hpp"
 
+#include "os.cpp"
 #include "profiler.cpp"
 
 void B();

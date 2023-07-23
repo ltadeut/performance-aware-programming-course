@@ -9,9 +9,13 @@
 
 #include "common.hpp"
 #include "haversine_formula.cpp"
+#include "os.cpp"
+
+#define PROFILER_ENABLED 1
+
+#include "json.cpp"
 #include "profiler.cpp"
 #include "string.cpp"
-#include "json.cpp"
 
 #define EARTH_RADIUS 6372.8
 
