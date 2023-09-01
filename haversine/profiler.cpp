@@ -9,6 +9,7 @@ struct profiler_section {
   u64 ElapsedInclusive;
   u64 ElapsedExclusive;
   u64 Hits;
+  u64 ProcessedByteCount;
 };
 
 static profiler_section GlobalProfilerSections[4096];
@@ -23,17 +24,18 @@ private:
   u32 mParentSectionIndex;
 
 public:
-  profiler_trace(const char *SectionName, u32 SectionIndex);
+  profiler_trace(const char *SectionName, u32 SectionIndex, u64 ByteCount);
   ~profiler_trace();
 };
 
-profiler_trace::profiler_trace(const char *SectionName, u32 SectionIndex) {
+profiler_trace::profiler_trace(const char *SectionName, u32 SectionIndex,
+                               u64 ByteCount) {
   mSectionName = SectionName;
   mSectionIndex = SectionIndex;
   mParentSectionIndex = GlobalActiveSectionIndex;
   mPreviousElapsedInclusive =
       GlobalProfilerSections[mSectionIndex].ElapsedInclusive;
-
+  GlobalProfilerSections[mSectionIndex].ProcessedByteCount += ByteCount;
   GlobalActiveSectionIndex = SectionIndex;
 
   mStartCounter = ReadCPUTimer();
@@ -55,29 +57,45 @@ profiler_trace::~profiler_trace() {
   Section->Hits++;
 }
 
-void PrintSectionData(u64 TotalElapsed) {
+void PrintSectionData(u64 TotalElapsed, u64 CPUFrequency) {
   for (u32 Index = 1; Index < ArrayCount(GlobalProfilerSections); Index++) {
     profiler_section *Section = &GlobalProfilerSections[Index];
 
     if (Section->Name) {
-      printf("\t%s[%llu]: %llu, %llu(%.2f%%, %.2f%%)\n", Section->Name,
+      printf("\t%s[%llu]: %llu, %llu(%.2f%%, %.2f%%)", Section->Name,
              Section->Hits, Section->ElapsedInclusive,
              Section->ElapsedExclusive,
              100.0 * Section->ElapsedInclusive / TotalElapsed,
              100.0 * Section->ElapsedExclusive / TotalElapsed);
+
+      if (Section->ProcessedByteCount) {
+        f64 Megabyte = 1024.0f * 1024.0f;
+        f64 Gigabyte = 1024.0f * Megabyte;
+
+        f64 Seconds = (f64)Section->ElapsedInclusive / (f64)CPUFrequency;
+        f64 BytesPerSecond = (f64)Section->ProcessedByteCount / (f64)Seconds;
+        f64 Megabytes = (f64)Section->ProcessedByteCount / (f64)Megabyte;
+        f64 GigabytesPerSecond = BytesPerSecond / Gigabyte;
+
+        printf(" %.3fmb at %.2fgb/s", Megabytes, GigabytesPerSecond);
+      }
+
+      putchar('\n');
     }
   }
 }
 
 #define NameConcat2(A, B) A##B
 #define NameConcat(A, B) NameConcat2(A, B)
-#define TimeBlock(NAME)                                                        \
-  profiler_trace NameConcat(Trace, __LINE__)(NAME, __COUNTER__ + 1)
+#define TimeBandwidth(NAME, BYTE_COUNT)                                        \
+  profiler_trace NameConcat(Trace, __LINE__)(NAME, __COUNTER__ + 1, BYTE_COUNT)
+#define TimeBlock(NAME) TimeBandwidth(NAME, 0)
 #define TimeFunction TimeBlock(__func__)
 
 #else
 
 #define TimeBlock(...)
+#define TimeBandwidth(...)
 #define TimeFunction
 
 #define PrintSectionData(...)
@@ -102,5 +120,5 @@ void EndProfileAndPrint() {
   printf("== Profiling results (Total time: %.3fms)\n",
          1000.0 * (f64)TotalElapsed / (f64)GlobalProfiler.CPUFrequency);
 
-  PrintSectionData(TotalElapsed);
+  PrintSectionData(TotalElapsed, GlobalProfiler.CPUFrequency);
 }

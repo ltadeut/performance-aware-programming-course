@@ -12,10 +12,10 @@
 #include "os.cpp"
 
 #define PROFILER_ENABLED 1
-
-#include "json.cpp"
 #include "profiler.cpp"
+
 #include "string.cpp"
+#include "json.cpp"
 
 #define EARTH_RADIUS 6372.8
 
@@ -28,6 +28,28 @@ struct memory_mapped_file {
   buffer Contents;
   bool IsValid;
 };
+
+buffer ReadEntireFile(const char *FileName) {
+  buffer Result = {0};
+
+  FILE *File = fopen(FileName, "rb");
+
+  if (File) {
+    fseek(File, 0, SEEK_END);
+    size_t Size = ftell(File);
+    fseek(File, 0, SEEK_SET);
+
+    TimeBandwidth(__func__, Size);
+    u8 *Data = (u8 *)malloc(Size + 1);
+    Data[Size] = 0;
+    fread(Data, sizeof(u8), Size, File);
+
+    Result.Size = Size;
+    Result.Data = Data;
+  }
+
+  return Result;
+}
 
 memory_mapped_file OpenMemoryMappedFile(const char *FileName) {
   memory_mapped_file Result = {0};
@@ -77,23 +99,14 @@ int main(int CommandLineArgumentsCount, char *CommandLineArguments[]) {
 
   BeginProfile();
 
-  memory_mapped_file File;
-  {
-
-    TimeBlock("ReadEntireFile");
-    const char *FileName = CommandLineArguments[1];
-
-    File = OpenMemoryMappedFile(FileName);
-
-    if (!File.IsValid) {
-      fprintf(stderr, "Failed to open the input file: %s\n", FileName);
-      return 1;
-    }
-  }
+  buffer File = ReadEntireFile(CommandLineArguments[1]);
 
   json_element *JsonData;
 
-  JsonData = ParseJSON((char *)File.Contents.Data, File.Contents.Size);
+  {
+    TimeBandwidth("ParseJSON", File.Size);
+    JsonData = ParseJSON((char *)File.Data, File.Size);
+  }
 
   if (JsonData) {
     json_element *PairsData = GetKey(JsonData, STRING("pairs"));
@@ -131,7 +144,6 @@ int main(int CommandLineArgumentsCount, char *CommandLineArguments[]) {
   }
 
   EndProfileAndPrint();
-  CloseMemoryMappedFile(&File);
 
   return 0;
 }
