@@ -1,4 +1,5 @@
 #if __arm__ || __aarch64__
+#include <sys/resource.h>
 static u64 ReadCPUTimer() {
   u64 Result;
 
@@ -11,6 +12,17 @@ static u64 EstimateCPUFrequency() {
   u64 Result;
 
   asm volatile("mrs %0, cntfrq_el0" : "=r"(Result)::"memory");
+
+  return Result;
+}
+
+static u64 ReadOSPageFaultCount() {
+  u64 Result = 0;
+
+  struct rusage Usage;
+  if (getrusage(RUSAGE_SELF, &Usage) == 0) {
+    Result = Usage.ru_minflt + Usage.ru_majflt;
+  }
 
   return Result;
 }
