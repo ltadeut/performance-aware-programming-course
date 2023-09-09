@@ -202,6 +202,22 @@ static void ReadEntireFile_ReadSyscall(test_context *Context,
   }
 }
 
+static void WriteToAllBytes(test_context * Context, read_parameters *Params) {
+	while (IsTesting(Context)) {
+		buffer DestBuffer = Params->Dest;
+
+		HandleAllocation(Params, &DestBuffer);
+		BeginTime(Context);
+		for (u64 Index = 0; Index < DestBuffer.Size; ++Index) {
+			DestBuffer.Data[Index] = Index;
+		}
+
+		EndTime(Context);
+		CountBytes(Context, DestBuffer.Size);
+		HandleDeallocation(Params, &DestBuffer);
+	}
+}
+
 static const char *DescribeAllocationType(allocation_type AllocType) {
   switch (AllocType) {
   case AllocType_none:
@@ -270,7 +286,9 @@ int main(int ArgCount, char *Args[]) {
 
   for (;;) {
     RunCounter++;
-    test_case Tests[4] = {
+    test_case Tests[6] = {
+        {"WriteToAllBytes", &WriteToAllBytes, AllocType_none},
+        {"WriteToAllBytes", &WriteToAllBytes, AllocType_malloc},
         {"read", &ReadEntireFile_ReadSyscall, AllocType_none},
         {"read", &ReadEntireFile_ReadSyscall, AllocType_malloc},
         {"fread", &ReadEntireFile_Fread, AllocType_none},
